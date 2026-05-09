@@ -19,7 +19,7 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 const app = express()
-const PORT = process.env.MCP_PORT || 4000
+const PORT = process.env.PORT || 4000
 const API_KEY = process.env.GOOGLE_API_KEY || ''
 /** Optional override; if unset or invalid for your key, we auto-pick from ListModels. */
 const GEMINI_MODEL_ENV = (process.env.GEMINI_MODEL || '').replace(/^models\//, '')
