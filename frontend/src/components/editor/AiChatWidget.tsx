@@ -47,7 +47,7 @@ type PendingDraft =
 
 const MCP_PAGE_TREE_URL = 'http://localhost:4000/api/mcp/page-tree'
 const JSON_ONLY_SUFFIX =
-  'Generate a JSON object only for the UI page tree. Return only valid JSON. Do not use markdown, code fences, or explanations.'
+  'Generate a JSON object only for the UI page tree. Return only valid JSON by following the rule book. Do not use markdown, code fences, or explanations.'
 const INITIAL_SYSTEM_MESSAGE =
   'Ask for UI content and I will generate a fresh page tree first; later prompts in this chat become patch updates.'
 
