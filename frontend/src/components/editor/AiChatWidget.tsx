@@ -249,7 +249,7 @@ export function AiChatWidget() {
         body: JSON.stringify({
           has_to_updated: shouldRequestUpdate,
           prompt: requestPrompt,
-          temperature: 0.2,
+          temperature: 0.0,
           ...(shouldRequestUpdate ? { tree } : {}),
           context: contextMessages,
         }),
