@@ -1,5 +1,8 @@
 # Sketch Me — Website Builder
 
+<img width="1919" height="901" alt="image" src="https://github.com/user-attachments/assets/fe315b9f-644a-4977-a50a-c54dc006e93c" />
+
+
 Overview
 --------
 Sketch Me is a small React + TypeScript visual website builder with:
