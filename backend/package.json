@@ -1,0 +1,22 @@
+{
+  "name": "sketch_me",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "mcp": "node server/mcp-server.js",
+    "mcp:dev": "node --watch server/mcp-server.js",
+    "lint": "eslint server/**/*.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "cors": "^2.8.6",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "dotenv": "^17.4.2",
+    "eslint": "^10.2.1",
+    "globals": "^17.5.0"
+  }
+}
