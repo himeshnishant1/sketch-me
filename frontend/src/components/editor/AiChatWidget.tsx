@@ -3,6 +3,7 @@ import { useEditorStore } from '../../stores/editorStore'
 import type { PageNode } from '../../types/pageTree'
 import { parsePageTreeJson } from '../../utils/importTree'
 import { findWithParent, insertChild, moveNode, removeNode } from '../../utils/tree'
+import { MCP_PAGE_TREE_URL } from '../../config/mcp' // adjust path if needed
 
 type ChatRole = 'user' | 'assistant' | 'system'
 
@@ -45,7 +46,6 @@ type PendingDraft =
   | { kind: 'tree'; tree: PageNode }
   | { kind: 'patch'; patch: TreePatch }
 
-const MCP_PAGE_TREE_URL = 'http://localhost:4000/api/mcp/page-tree'
 const JSON_ONLY_SUFFIX =
   'Generate a JSON object only for the UI page tree. Return only valid JSON by following the rule book. Do not use markdown, code fences, or explanations.'
 const INITIAL_SYSTEM_MESSAGE =
