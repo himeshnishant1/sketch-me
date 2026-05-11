@@ -1,6 +1,6 @@
 // Expose MCP endpoint URL using Vite env var VITE_MCP_BASE_URL in production.
-// Falls back to http://localhost:4000 for local development.
-const DEFAULT_LOCAL = 'http://localhost:4000'
+// Falls back to http://localhost:3000 for local development.
+const DEFAULT_LOCAL = 'http://localhost:3000'
 
 export const MCP_API_BASE = (import.meta.env.VITE_MCP_BASE_URL || DEFAULT_LOCAL).replace(/\/+$/, '')
 

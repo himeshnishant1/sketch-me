@@ -116,6 +116,56 @@ export function BlockButton({ node, children }: BlockRenderProps & { children?: 
   warnButtonLegacyProps(node)
 
   const href = String(node.meta?.href ?? node.props.href ?? '#')
+  const navLink =
+    node.props.navLink === true || String(node.props.navLink).toLowerCase() === 'true'
+  const parseSubMenu = (): Array<{ label: string; href: string }> => {
+    const raw = node.props.subMenu
+    if (Array.isArray(raw)) {
+      return raw
+        .filter((item): item is { label: unknown; href: unknown } => !!item && typeof item === 'object')
+        .map((item) => ({
+          label: String(item.label ?? ''),
+          href: String(item.href ?? '#'),
+        }))
+        .filter((item) => item.label.trim().length > 0)
+    }
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw) as unknown
+        if (!Array.isArray(parsed)) return []
+        return parsed
+          .filter((item): item is { label: unknown; href: unknown } => !!item && typeof item === 'object')
+          .map((item) => ({
+            label: String(item.label ?? ''),
+            href: String(item.href ?? '#'),
+          }))
+          .filter((item) => item.label.trim().length > 0)
+      } catch {
+        return []
+      }
+    }
+    return []
+  }
+  const subMenu = parseSubMenu()
+
+  if (navLink) {
+    return (
+      <div className="nav-item">
+        <a href={href} className="nav-link">
+          {node.children.length > 0 ? children : String(node.props.label ?? '')}
+        </a>
+        {subMenu.length > 0 ? (
+          <ul className="nav-submenu">
+            {subMenu.map((item) => (
+              <li key={`${item.label}-${item.href}`}>
+                <a href={item.href}>{item.label}</a>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+    )
+  }
 
   if (node.children.length > 0) {
     return (

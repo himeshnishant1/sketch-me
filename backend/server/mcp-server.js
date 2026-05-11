@@ -158,6 +158,12 @@ Visible text:
 - If Button has children, prefer link in meta.href.
 - For Image prefer meta.src and meta.alt.
 
+Advanced navbar:
+- Navbar should be responsive by default across desktop/tablet/mobile.
+- For nav links, use Button with props.navLink=true and optional props.subMenu array.
+- props.subMenu items should be objects like { "label": "Docs", "href": "/docs" }.
+- Submenu opens on hover/focus for desktop and remains accessible on mobile.
+
 Special rules:
 - Heading should use meta.headingLevel in 1..6.
 - Navbar must not use props.brand.
@@ -231,6 +237,28 @@ function isStyleObject(value) {
     if (STATE_STYLE_KEYS.has(key)) return isStyleObject(v)
     return false
   })
+}
+
+function isValidSubMenuItem(item) {
+  return (
+    isPlainObject(item) &&
+    typeof item.label === 'string' &&
+    item.label.trim().length > 0 &&
+    typeof item.href === 'string'
+  )
+}
+
+function parseSubMenuLike(value) {
+  if (Array.isArray(value)) return value
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return Array.isArray(parsed) ? parsed : null
+    } catch {
+      return null
+    }
+  }
+  return null
 }
 
 function validatePageTreeNode(node, pathLabel, seenIds, isRoot, errors) {
@@ -317,6 +345,26 @@ function validatePageTreeNode(node, pathLabel, seenIds, isRoot, errors) {
   if (node.type === 'Span') {
     if (!isPlainObject(node.props) || typeof node.props.text !== 'string') {
       errors.push(`${pathLabel}: Span requires props.text as a string`)
+    }
+  }
+
+  if (node.type === 'Button' && isPlainObject(node.props)) {
+    if (node.props.navLink !== undefined) {
+      const navLinkValid =
+        typeof node.props.navLink === 'boolean' ||
+        (typeof node.props.navLink === 'string' &&
+          ['true', 'false'].includes(node.props.navLink.toLowerCase()))
+      if (!navLinkValid) {
+        errors.push(`${pathLabel}: Button props.navLink must be boolean or "true"/"false"`)
+      }
+    }
+    if (node.props.subMenu !== undefined) {
+      const submenu = parseSubMenuLike(node.props.subMenu)
+      if (!submenu) {
+        errors.push(`${pathLabel}: Button props.subMenu must be an array or JSON string array`)
+      } else if (!submenu.every(isValidSubMenuItem)) {
+        errors.push(`${pathLabel}: Button props.subMenu items must include non-empty label and string href`)
+      }
     }
   }
 

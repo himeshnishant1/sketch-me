@@ -195,6 +195,12 @@ const builtins: BlockDefinition[] = [
     schema: [
       { key: 'label', type: 'text', label: 'Label (legacy if no children)' },
       { key: 'href', type: 'text', label: 'URL (legacy — prefer Meta)' },
+      { key: 'navLink', type: 'text', label: 'Nav link (true/false)' },
+      {
+        key: 'subMenu',
+        type: 'textarea',
+        label: 'Submenu JSON (e.g. [{"label":"Docs","href":"/docs"}])',
+      },
     ],
     defaultProps: {},
     defaultStyles: {

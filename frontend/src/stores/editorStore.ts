@@ -71,6 +71,12 @@ export function createDefaultPageTree(): PageNode {
           backgroundColor: 'var(--color-surface)',
           borderBottom: '1px solid var(--color-border)',
         },
+        responsive: {
+          mobile: {
+            alignItems: 'stretch',
+            gap: '10px',
+          },
+        },
         children: [
           {
             id: uuid(),
@@ -83,6 +89,11 @@ export function createDefaultPageTree(): PageNode {
               gap: '12px',
               flex: '1',
               minWidth: '0',
+            },
+            responsive: {
+              mobile: {
+                width: '100%',
+              },
             },
             children: [
               span('My Site', {
@@ -106,7 +117,64 @@ export function createDefaultPageTree(): PageNode {
               flex: '1',
               minWidth: '0',
             },
-            children: [],
+            responsive: {
+              mobile: {
+                width: '100%',
+                justifyContent: 'flex-start',
+                flexDirection: 'column',
+                gap: '8px',
+              },
+            },
+            children: [
+              {
+                id: uuid(),
+                type: 'Button',
+                props: {
+                  navLink: true,
+                  subMenu: [
+                    { label: 'Overview', href: '#overview' },
+                    { label: 'Changelog', href: '#changelog' },
+                  ],
+                },
+                meta: { href: '#product' },
+                styles: {
+                  backgroundColor: 'transparent',
+                  color: 'var(--color-text)',
+                  textDecoration: 'none',
+                  padding: '8px 10px',
+                  fontWeight: '600',
+                },
+                children: [span('Product')],
+              },
+              {
+                id: uuid(),
+                type: 'Button',
+                props: { navLink: true },
+                meta: { href: '#pricing' },
+                styles: {
+                  backgroundColor: 'transparent',
+                  color: 'var(--color-text)',
+                  textDecoration: 'none',
+                  padding: '8px 10px',
+                  fontWeight: '600',
+                },
+                children: [span('Pricing')],
+              },
+              {
+                id: uuid(),
+                type: 'Button',
+                props: { navLink: true },
+                meta: { href: '#about' },
+                styles: {
+                  backgroundColor: 'transparent',
+                  color: 'var(--color-text)',
+                  textDecoration: 'none',
+                  padding: '8px 10px',
+                  fontWeight: '600',
+                },
+                children: [span('About')],
+              },
+            ],
           },
           {
             id: uuid(),
@@ -120,6 +188,12 @@ export function createDefaultPageTree(): PageNode {
               gap: '12px',
               flex: '1',
               minWidth: '0',
+            },
+            responsive: {
+              mobile: {
+                width: '100%',
+                justifyContent: 'flex-start',
+              },
             },
             children: [
               {

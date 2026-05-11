@@ -397,6 +397,19 @@
   gap: 8px;
 }
 
+.ai-chat__scroll-bottom {
+  position: absolute;
+  right: 14px;
+  bottom: 102px;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 1px solid var(--editor-border, #272a35);
+  background: #1b1f2a;
+  color: #e5e7eb;
+  cursor: pointer;
+}
+
 .ai-chat-fab {
   position: fixed;
   right: 18px;
@@ -411,6 +424,10 @@
   cursor: pointer;
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
   z-index: 60;
+}
+
+.ai-chat-fab--attention {
+  animation: applyPulse 1.1s ease-in-out infinite;
 }
 
 @keyframes applyPulse {

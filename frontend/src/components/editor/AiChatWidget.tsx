@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useEditorStore } from '../../stores/editorStore'
 import type { PageNode } from '../../types/pageTree'
 import { parsePageTreeJson } from '../../utils/importTree'
@@ -51,40 +51,13 @@ const JSON_ONLY_SUFFIX =
 const INITIAL_SYSTEM_MESSAGE =
   'Ask for UI content and I will generate a fresh page tree first; later prompts in this chat become patch updates.'
 
-function extractTextPayload(payload: unknown): string {
-  if (typeof payload === 'string') return payload
-  if (!payload || typeof payload !== 'object') return String(payload ?? '')
-
-  const o = payload as Record<string, unknown>
-  const directCandidates = [
-    o.outputText,
-    o.response,
-    o.content,
-    o.message,
-    o.answer,
-    o.text,
-  ]
-  for (const item of directCandidates) {
-    if (typeof item === 'string' && item.trim()) return item
-  }
-
-  const nestedCandidates = [o.result, o.data]
-  for (const nested of nestedCandidates) {
-    if (!nested || typeof nested !== 'object') continue
-    const text = extractTextPayload(nested)
-    if (text.trim()) return text
-  }
-
-  return JSON.stringify(payload)
-}
-
-function extractPageTreeJson(payload: unknown): string | null {
+function extractPageTree(payload: unknown): PageNode | null {
   if (!payload || typeof payload !== 'object') return null
   const o = payload as Record<string, unknown>
   if (!('pageTree' in o)) return null
   const pageTree = o.pageTree
   if (!pageTree || typeof pageTree !== 'object') return null
-  return JSON.stringify(pageTree)
+  return pageTree as PageNode
 }
 
 function parsePatchPayload(payload: unknown): TreePatch | null {
@@ -92,19 +65,28 @@ function parsePatchPayload(payload: unknown): TreePatch | null {
   const o = payload as Record<string, unknown>
   const patchSource =
     (o.patch as Record<string, unknown> | undefined) ??
-    (o.updates || o.adds || o.deletes || o.moves ? o : undefined)
+    (Object.prototype.hasOwnProperty.call(o, 'updates') ||
+    Object.prototype.hasOwnProperty.call(o, 'adds') ||
+    Object.prototype.hasOwnProperty.call(o, 'deletes') ||
+    Object.prototype.hasOwnProperty.call(o, 'moves')
+      ? o
+      : undefined)
   if (!patchSource || typeof patchSource !== 'object') return null
 
-  const updates = Array.isArray(patchSource.updates) ? patchSource.updates : []
-  const adds = Array.isArray(patchSource.adds) ? patchSource.adds : []
-  const deletes = Array.isArray(patchSource.deletes) ? patchSource.deletes : []
-  const moves = Array.isArray(patchSource.moves) ? patchSource.moves : []
+  if (
+    !Array.isArray(patchSource.updates) ||
+    !Array.isArray(patchSource.adds) ||
+    !Array.isArray(patchSource.deletes) ||
+    !Array.isArray(patchSource.moves)
+  ) {
+    return null
+  }
 
   return {
-    updates: updates as PatchUpdate[],
-    adds: adds as PatchAdd[],
-    deletes: deletes as PatchDelete[],
-    moves: moves as PatchMove[],
+    updates: patchSource.updates as PatchUpdate[],
+    adds: patchSource.adds as PatchAdd[],
+    deletes: patchSource.deletes as PatchDelete[],
+    moves: patchSource.moves as PatchMove[],
   }
 }
 
@@ -139,6 +121,16 @@ function applyPatchToTree(baseTree: PageNode, patch: TreePatch): PageNode {
     }
   }
 
+  for (const op of patch.adds) {
+    if (!op?.parentId || !op.node) continue
+    const parent = nodeById(next, op.parentId)
+    if (!parent) continue
+    if (!op.node.id || !op.node.type || !Array.isArray(op.node.children)) continue
+    if (nodeById(next, op.node.id)) continue
+    const index = positionToIndex(op.position, parent.children.length)
+    insertChild(next, op.parentId, index, structuredClone(op.node))
+  }
+
   for (const op of patch.deletes) {
     if (!op?.id || op.id === next.id) continue
     removeNode(next, op.id)
@@ -152,60 +144,22 @@ function applyPatchToTree(baseTree: PageNode, patch: TreePatch): PageNode {
     moveNode(next, op.id, op.newParentId, index)
   }
 
-  for (const op of patch.adds) {
-    if (!op?.parentId || !op.node) continue
-    const parent = nodeById(next, op.parentId)
-    if (!parent) continue
-    if (!op.node.id || !op.node.type || !Array.isArray(op.node.children)) continue
-    if (nodeById(next, op.node.id)) continue
-    const index = positionToIndex(op.position, parent.children.length)
-    insertChild(next, op.parentId, index, structuredClone(op.node))
-  }
-
   return next
 }
 
-function extractFirstJsonObject(raw: string): string | null {
-  const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/i)
-  const source = (fenceMatch?.[1] ?? raw).trim()
-
-  let depth = 0
-  let start = -1
-  let inString = false
-  let escape = false
-
-  for (let i = 0; i < source.length; i += 1) {
-    const ch = source[i]
-    if (inString) {
-      if (escape) {
-        escape = false
-      } else if (ch === '\\') {
-        escape = true
-      } else if (ch === '"') {
-        inString = false
-      }
-      continue
-    }
-
-    if (ch === '"') {
-      inString = true
-      continue
-    }
-    if (ch === '{') {
-      if (depth === 0) start = i
-      depth += 1
-      continue
-    }
-    if (ch === '}') {
-      if (depth === 0) continue
-      depth -= 1
-      if (depth === 0 && start >= 0) {
-        return source.slice(start, i + 1)
-      }
-    }
-  }
-
-  return null
+function formatErrorPayload(payload: unknown): string {
+  if (!payload || typeof payload !== 'object') return ''
+  const o = payload as Record<string, unknown>
+  const error = typeof o.error === 'string' ? o.error : ''
+  const detailsArray = Array.isArray(o.details) ? o.details.filter((x) => typeof x === 'string') : []
+  const details =
+    detailsArray.length > 0
+      ? detailsArray.slice(0, 6).join('; ')
+      : typeof o.details === 'string'
+        ? o.details
+        : ''
+  if (!error && !details) return ''
+  return [error, details].filter(Boolean).join(' — ')
 }
 
 export function AiChatWidget() {
@@ -223,6 +177,8 @@ export function AiChatWidget() {
   const [pendingDraft, setPendingDraft] = useState<PendingDraft | null>(null)
   const [rollbackTree, setRollbackTree] = useState<PageNode | null>(null)
   const [hasGeneratedBaseTree, setHasGeneratedBaseTree] = useState(false)
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false)
+  const messagesRef = useRef<HTMLDivElement | null>(null)
 
   const contextMessages = useMemo(
     () =>
@@ -231,6 +187,32 @@ export function AiChatWidget() {
         .map((m) => ({ role: m.role, content: m.content })),
     [messages],
   )
+
+  useEffect(() => {
+    const el = messagesRef.current
+    if (!el) return
+    const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 24
+    if (nearBottom) {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+      setShowScrollToBottom(false)
+    } else {
+      setShowScrollToBottom(true)
+    }
+  }, [messages])
+
+  const onMessagesScroll = () => {
+    const el = messagesRef.current
+    if (!el) return
+    const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 24
+    setShowScrollToBottom(!nearBottom)
+  }
+
+  const scrollMessagesToBottom = () => {
+    const el = messagesRef.current
+    if (!el) return
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    setShowScrollToBottom(false)
+  }
 
   const sendPrompt = async () => {
     const userPrompt = prompt.trim()
@@ -256,7 +238,15 @@ export function AiChatWidget() {
       })
 
       if (!res.ok) {
-        throw new Error(`MCP request failed with status ${res.status}`)
+        let errorMessage = `MCP request failed with status ${res.status}`
+        try {
+          const errPayload = (await res.json()) as unknown
+          const parsed = formatErrorPayload(errPayload)
+          if (parsed) errorMessage = parsed
+        } catch {
+          // ignore non-JSON error payload
+        }
+        throw new Error(errorMessage)
       }
 
       const body = (await res.json()) as unknown
@@ -270,14 +260,12 @@ export function AiChatWidget() {
         return
       }
 
-      const pageTreeJson = extractPageTreeJson(body)
-      const rawText = extractTextPayload(body)
-      const jsonText = pageTreeJson ?? extractFirstJsonObject(rawText)
-      if (!jsonText) {
+      const pageTree = extractPageTree(body)
+      if (!pageTree) {
         throw new Error('AI response did not include a valid pageTree or patch payload.')
       }
 
-      const parsedTree = parsePageTreeJson(JSON.parse(jsonText))
+      const parsedTree = parsePageTreeJson(pageTree)
       setPendingDraft({ kind: 'tree', tree: parsedTree })
       setHasGeneratedBaseTree(true)
       setMessages((prev) => [
@@ -329,7 +317,7 @@ export function AiChatWidget() {
     return (
       <button
         type="button"
-        className="ai-chat-fab"
+        className={`ai-chat-fab ${pendingDraft ? 'ai-chat-fab--attention' : ''}`}
         onClick={() => setMinimized(false)}
         aria-label="Open AI chat"
       >
@@ -363,7 +351,7 @@ export function AiChatWidget() {
         </div>
       </header>
 
-      <div className="ai-chat__messages">
+      <div className="ai-chat__messages" ref={messagesRef} onScroll={onMessagesScroll}>
         {messages.map((m, idx) => (
           <article key={`${m.role}-${idx}`} className={`ai-chat__message ai-chat__message--${m.role}`}>
             <div className="ai-chat__role">{m.role}</div>
@@ -371,6 +359,16 @@ export function AiChatWidget() {
           </article>
         ))}
       </div>
+      {showScrollToBottom ? (
+        <button
+          type="button"
+          className="ai-chat__scroll-bottom"
+          onClick={scrollMessagesToBottom}
+          aria-label="Scroll chat to bottom"
+        >
+          ↓
+        </button>
+      ) : null}
 
       <div className="ai-chat__composer">
         <textarea
