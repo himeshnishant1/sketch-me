@@ -1,9 +1,16 @@
 import type { PageNode } from '../types/pageTree'
+import JSZip from 'jszip'
 
 type BuildFiles = {
   html: string
   css: string
   js: string
+}
+
+type ReactExportFile = {
+  filename: string
+  content: string
+  mime?: string
 }
 
 const INDENT = '  '
@@ -42,6 +49,10 @@ function escapeHtml(input: string): string {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;')
+}
+
+function escapeJsString(input: string): string {
+  return input.replaceAll('\\', '\\\\').replaceAll("'", "\\'")
 }
 
 function parseSubMenu(raw: unknown): Array<{ label: string; href: string }> {
@@ -336,6 +347,241 @@ export function exportBuildFromTree(tree: PageNode) {
   downloadFile('index.html', files.html, 'text/html;charset=utf-8')
   downloadFile('styles.css', files.css, 'text/css;charset=utf-8')
   downloadFile('script.js', files.js, 'text/javascript;charset=utf-8')
+}
+
+function componentNameForNode(node: PageNode, index: number): string {
+  const clean =
+    node.type
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .replace(/^[0-9]+/, '') || 'Section'
+  return `${clean}Section${index + 1}`
+}
+
+function renderNodeJsx(node: PageNode, depth = 2): string {
+  const pad = INDENT.repeat(depth)
+  const cls = classNameFor(node)
+  const childrenJsx = node.children.map((child) => renderNodeJsx(child, depth + 1)).join('\n')
+  const childOrLabel = childrenJsx || `'${escapeJsString(String(node.props.label ?? node.props.text ?? ''))}'`
+
+  switch (node.type) {
+    case 'Page':
+      return `${pad}<main className="${cls}">\n${childrenJsx}\n${pad}</main>`
+    case 'Section':
+      return `${pad}<section className="${cls}">\n${childrenJsx}\n${pad}</section>`
+    case 'Container':
+    case 'Columns':
+      return `${pad}<div className="${cls}">\n${childrenJsx}\n${pad}</div>`
+    case 'Divider':
+      return `${pad}<hr className="${cls}" />`
+    case 'Navbar':
+      return `${pad}<nav className="${cls} nav-shell" data-navbar="true">\n${childrenJsx}\n${pad}</nav>`
+    case 'Footer':
+      return `${pad}<footer className="${cls}">\n${childrenJsx}\n${pad}</footer>`
+    case 'Span':
+      return `${pad}<span className="${cls}">${`{'${escapeJsString(String(node.props.text ?? ''))}'}`}</span>`
+    case 'Heading': {
+      const level =
+        typeof node.meta?.headingLevel === 'number' && node.meta.headingLevel >= 1 && node.meta.headingLevel <= 6
+          ? node.meta.headingLevel
+          : 2
+      return `${pad}<h${level} className="${cls}">${childrenJsx || `{ '${escapeJsString(String(node.props.text ?? ''))}' }`}</h${level}>`
+    }
+    case 'Text':
+      return `${pad}<p className="${cls}">${childrenJsx || `{ '${escapeJsString(String(node.props.text ?? ''))}' }`}</p>`
+    case 'Image':
+      return `${pad}<img className="${cls}" src="${escapeJsString(String(node.meta?.src ?? node.props.src ?? ''))}" alt="${escapeJsString(String(node.meta?.alt ?? node.props.alt ?? ''))}" />`
+    case 'Button': {
+      const href = escapeJsString(String(node.meta?.href ?? node.props.href ?? '#'))
+      if (!isTrue(node.props.navLink)) {
+        return `${pad}<a className="${cls}" href="${href}">${childOrLabel}</a>`
+      }
+      const subMenu = parseSubMenu(node.props.subMenu)
+      const submenuJsx =
+        subMenu.length === 0
+          ? ''
+          : `\n${pad}  <ul className="nav-submenu">\n${subMenu
+              .map(
+                (item) =>
+                  `${pad}    <li><a href="${escapeJsString(item.href)}">${`{'${escapeJsString(item.label)}'}`}</a></li>`,
+              )
+              .join('\n')}\n${pad}  </ul>`
+      return `${pad}<div className="${cls} nav-item"><a className="nav-link" href="${href}">${childOrLabel}</a>${submenuJsx}\n${pad}</div>`
+    }
+    case 'Input':
+      return `${pad}<input className="${cls}" type="${escapeJsString(String(node.props.type ?? 'text'))}" placeholder="${escapeJsString(String(node.props.placeholder ?? ''))}" defaultValue="${escapeJsString(String(node.props.value ?? ''))}" />`
+    case 'TextField':
+      return `${pad}<input className="${cls}" type="text" placeholder="${escapeJsString(String(node.props.placeholder ?? ''))}" defaultValue="${escapeJsString(String(node.props.value ?? ''))}" />`
+    case 'TextArea':
+      return `${pad}<textarea className="${cls}" rows={${Math.max(2, Number(node.props.rows ?? 4))}} placeholder="${escapeJsString(String(node.props.placeholder ?? ''))}" defaultValue="${escapeJsString(String(node.props.value ?? ''))}" />`
+    case 'Select':
+      return `${pad}<select className="${cls}">\n${childrenJsx}\n${pad}</select>`
+    case 'Option':
+      return `${pad}<option className="${cls}" value="${escapeJsString(String(node.props.value ?? ''))}">${`{'${escapeJsString(String(node.props.label ?? node.props.text ?? ''))}'}`}</option>`
+    case 'Checkbox':
+      return `${pad}<label className="${cls}"><input type="checkbox" defaultChecked={${Boolean(node.props.checked)}} /> ${childrenJsx || `{ '${escapeJsString(String(node.props.label ?? ''))}' }`}</label>`
+    case 'Radio':
+      return `${pad}<label className="${cls}"><input type="radio" name="${escapeJsString(String(node.props.name ?? ''))}" defaultChecked={${Boolean(node.props.checked)}} /> ${childrenJsx || `{ '${escapeJsString(String(node.props.label ?? ''))}' }`}</label>`
+    case 'Label':
+      return `${pad}<label className="${cls}">\n${childrenJsx}\n${pad}</label>`
+    case 'Form':
+      return `${pad}<form className="${cls}" onSubmit={(e) => e.preventDefault()}>\n${childrenJsx}\n${pad}</form>`
+    default:
+      return `${pad}<div className="${cls}" data-type="${escapeJsString(node.type)}">\n${childrenJsx}\n${pad}</div>`
+  }
+}
+
+function buildReactFilesFromTree(tree: PageNode): ReactExportFile[] {
+  const { css } = buildFilesFromTree(tree)
+  const topSections = tree.children ?? []
+  const componentFiles: ReactExportFile[] = []
+  const imports: string[] = []
+  const appChildren: string[] = []
+
+  topSections.forEach((node, index) => {
+    const componentName = componentNameForNode(node, index)
+    imports.push(`import { ${componentName} } from './components/${componentName}'`)
+    appChildren.push(`      <${componentName} />`)
+    componentFiles.push({
+      filename: `src/components/${componentName}.jsx`,
+      content: `export function ${componentName}() {\n  return (\n${renderNodeJsx(node, 2)}\n  )\n}\n`,
+      mime: 'text/javascript;charset=utf-8',
+    })
+  })
+
+  const rootClass = classNameFor(tree)
+  const appFile: ReactExportFile = {
+    filename: 'src/App.jsx',
+    content: `${imports.join('\n')}
+import './styles.css'
+
+export default function App() {
+  return (
+    <main className="${rootClass}">
+${appChildren.join('\n')}
+    </main>
+  )
+}
+`,
+    mime: 'text/javascript;charset=utf-8',
+  }
+
+  const mainFile: ReactExportFile = {
+    filename: 'src/main.jsx',
+    content: `import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App'
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+)
+`,
+    mime: 'text/javascript;charset=utf-8',
+  }
+
+  const htmlFile: ReactExportFile = {
+    filename: 'index.html',
+    content: `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${String(tree.props.title ?? 'React Export')}</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+`,
+    mime: 'text/html;charset=utf-8',
+  }
+
+  const cssFile: ReactExportFile = {
+    filename: 'src/styles.css',
+    content: css,
+    mime: 'text/css;charset=utf-8',
+  }
+
+  const packageJsonFile: ReactExportFile = {
+    filename: 'package.json',
+    content: `{
+  "name": "sketch-me-react-export",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.0.0",
+    "vite": "^8.0.0"
+  }
+}
+`,
+    mime: 'application/json;charset=utf-8',
+  }
+
+  const viteConfigFile: ReactExportFile = {
+    filename: 'vite.config.js',
+    content: `import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+})
+`,
+    mime: 'text/javascript;charset=utf-8',
+  }
+
+  const gitIgnoreFile: ReactExportFile = {
+    filename: '.gitignore',
+    content: `node_modules
+dist
+.DS_Store
+`,
+    mime: 'text/plain;charset=utf-8',
+  }
+
+  const readmeFile: ReactExportFile = {
+    filename: 'README.md',
+    content: `# React Export
+
+Generated by Sketch Me.
+
+## Run
+
+\`\`\`bash
+npm install
+npm run dev
+\`\`\`
+`,
+    mime: 'text/markdown;charset=utf-8',
+  }
+
+  return [htmlFile, mainFile, appFile, cssFile, packageJsonFile, viteConfigFile, gitIgnoreFile, readmeFile, ...componentFiles]
+}
+
+export async function exportReactBuildFromTree(tree: PageNode) {
+  const files = buildReactFilesFromTree(tree)
+  const zip = new JSZip()
+  files.forEach((file) => {
+    zip.file(file.filename, file.content)
+  })
+  const zipBlob = await zip.generateAsync({ type: 'blob' })
+  const url = URL.createObjectURL(zipBlob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'sketch-me-react-export.zip'
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 export function buildPreviewDocumentFromTree(tree: PageNode): string {

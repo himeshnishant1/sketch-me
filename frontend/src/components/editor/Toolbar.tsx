@@ -2,7 +2,7 @@ import { useRef, type ChangeEventHandler } from 'react'
 import { useHistoryStore } from '../../stores/historyStore'
 import { createDefaultPageTree, useEditorStore } from '../../stores/editorStore'
 import type { Viewport } from '../../types/pageTree'
-import { exportBuildFromTree } from '../../utils/exportBuild'
+import { exportBuildFromTree, exportReactBuildFromTree } from '../../utils/exportBuild'
 import { parsePageTreeFromText } from '../../utils/importTree'
 
 export function Toolbar() {
@@ -110,6 +110,9 @@ export function Toolbar() {
         </button>
         <button type="button" className="btn btn--ghost" onClick={() => exportBuildFromTree(tree)}>
           Export Build
+        </button>
+        <button type="button" className="btn btn--ghost" onClick={() => exportReactBuildFromTree(tree)}>
+          Export React
         </button>
         <button type="button" className="btn btn--danger-outline" onClick={resetDemo}>
           Reset demo
